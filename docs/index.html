@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Epi-Duo：两条把表观证据送进虚拟细胞的路</title>
+<meta name="description" content="同一张表观证据表，两种读法：先做成调控网络再输入，或把顺式元件直接编码。与 STATE 在同一 Replogle 基准、同一 cell-eval 协议下比较。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="masthead">
+  <canvas id="heroField" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <p class="eyebrow">Epi-Duo · virtual cell · epigenome prior</p>
+    <h1>扰动标签是 one-hot，<em>基因本身</em>对模型一无所知</h1>
+    <p class="lede">
+      STATE 一类虚拟细胞模型把「敲掉哪个基因」写成一个可学习的嵌入。
+      它看不到这个基因的启动子是否开放、有没有转录因子结合、有没有远距离接触。
+      <strong>Epi-Duo</strong> 把公开的 K562 表观数据做成两种先验，接到同一套集合到集合的骨架上：
+      模型 A 先做成候选调控网络，模型 B 把顺式元件直接编码。
+    </p>
+    <p class="claim">
+      同一张证据表，两种读法；同一套基准，同一套 cell-eval。<br>
+      <small>先验路径零初始化起步，所以训练开始时两个模型都等价于无先验骨架。</small>
+    </p>
+    <dl class="facts">
+      <div class="fact"><dt>基准细胞</dt><dd><span data-fill="benchmark.cells.k562">—</span><span> + </span><span data-fill="benchmark.cells.rpe1">—</span></dd></div>
+      <div class="fact"><dt>HVG</dt><dd><span data-fill="benchmark.hvg">—</span></dd></div>
+      <div class="fact"><dt>合格扰动</dt><dd><span data-fill="benchmark.eligible">—</span></dd></div>
+      <div class="fact"><dt>ATAC 元件</dt><dd><span data-fill="prior.atac">—</span></dd></div>
+      <div class="fact"><dt>候选边</dt><dd><span id="edgeTotal">—</span></dd></div>
+      <div class="fact"><dt>源因子</dt><dd><span data-fill="prior.factors">—</span></dd></div>
+    </dl>
+  </div>
+</header>
+
+<main id="main">
+
+<section>
+  <div class="col">
+    <div class="sec-head" data-reveal>
+      <span class="sec-num">00 / 问题</span>
+      <h2>标签知道「敲了谁」，但不知道这个基因是谁</h2>
+    </div>
+    <div class="prose" data-reveal>
+      <p>
+        虚拟细胞模型的标准接口是：输入对照细胞集合与扰动标签，输出扰动后的细胞集合。
+        扰动标签通常是基因名的 one-hot 或嵌入。对模型来说，敲 <code>GABPA</code> 和敲一个从未见过的基因，
+        差别只在「这个编号有没有被训练过」，而不在「这个基因的调控邻域长什么样」。
+      </p>
+      <p>
+        表观基因组给出了另一条路：启动子可达性、因子结合、Hi-C 环、甲基化——这些在公共数据库里已经有了。
+        问题变成：<strong>怎么把这些证据接进集合到集合的预测器，而且接进去之后真的有用。</strong>
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col-wide">
+    <div class="sec-head col" data-reveal>
+      <span class="sec-num">01 / 证据</span>
+      <h2>一张真实基因座上的全部证据</h2>
+      <p>下面是训练用的先验里挑出的一个真实扰动靶标（<span class="mono" data-fill="example.gene">—</span>）。柱高是 ATAC 开放度，颜色是甲基化；虚线是 Hi-C 环连到 TSS；点是 ChIP 结合因子。</p>
+    </div>
+    <figure class="fig" data-reveal>
+      <div class="fig__frame">
+        <div class="ctl-row">
+          <div class="seg">
+            <button type="button" class="btn" id="locusRaw" aria-pressed="true">原始证据</button>
+            <button type="button" class="btn" id="locusGrn" aria-pressed="false">模型 A 读法</button>
+            <button type="button" class="btn" id="locusDirect" aria-pressed="false">模型 B 读法</button>
+          </div>
+        </div>
+        <canvas id="locus" class="field tall" width="980" height="560"></canvas>
+        <p class="readout" id="locusInfo">把鼠标移到一根柱子上，看这个元件的全部证据。</p>
+      </div>
+      <figcaption><b>真实数据。</b> ENCODE K562 ATAC / WGBS / Hi-C / TF ChIP，GENCODE v44；距离按模型输入做了对数缩放。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sec-head" data-reveal>
+      <span class="sec-num">02 / 同一张证据表</span>
+      <h2>两种模型读的是同一批峰、环和甲基化</h2>
+    </div>
+    <div class="prose" data-reveal>
+      <p>
+        元件 = ENCODE K562 ATAC 峰（<span data-fill="prior.atac">—</span> 个）。
+        ChIP 结合只在 ATAC 峰内计数；启动子窗口是每个转录本 TSS 的 <code>[−1000, +1001)</code>；
+        环是四份 Hi-C loop 的并集（<span data-fill="prior.loops">—</span> 条）；
+        甲基化是两次 WGBS 的覆盖加权 CpG 分数，读数 &lt; 10 记为未观测（掩码，不当 0）。
+      </p>
+    </div>
+    <ul class="terms" data-reveal>
+      <li><span class="k">tf_promoter</span><span class="v">ChIP ∩ ATAC ∩ 启动子三重重叠 → 因子到靶基因</span></li>
+      <li><span class="k">tf_distal</span><span class="v">因子结合的 ATAC 峰落在环的对侧锚点，另一侧是靶基因启动子</span></li>
+      <li><span class="k">promoter_contact</span><span class="v">两个启动子落在同一条环的两端（对称）</span></li>
+      <li><span class="k">shared_element</span><span class="v">两个基因经环连到同一个远端 ATAC 峰（对称）</span></li>
+    </ul>
+    <div class="prose" data-reveal style="margin-top:26px">
+      <p>
+        模型 A 把这些关系收成边；模型 B 不连边，而是给每个基因保留最多 24 个顺式元件 token
+        （优先：启动子重叠 → 环连 → TSS ±50 kb 内最近）。两边的对照分别是：保持度数的双边交换，以及基因间重排 token 集合。
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col-wide">
+    <div class="sec-head col" data-reveal>
+      <span class="sec-num">03 / 共同骨架</span>
+      <h2>差别只在先验怎么接入，不在集合到集合本身</h2>
+    </div>
+    <figure class="fig" data-reveal>
+      <div class="fig__frame">
+        <div class="ctl-row">
+          <div class="seg">
+            <button type="button" class="btn" id="archNone" aria-pressed="false">无先验骨架</button>
+            <button type="button" class="btn" id="archGrn" aria-pressed="true">Epi-GRN</button>
+            <button type="button" class="btn" id="archDirect" aria-pressed="false">Epi-Direct</button>
+          </div>
+        </div>
+        <canvas id="arch" class="field" width="980" height="420"></canvas>
+      </div>
+      <figcaption><b>结构示意。</b> 先验在两处进入：被敲基因的扰动 token，以及每个输出基因的读出。路径零初始化，开局等价于骨架。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="col-wide">
+    <div class="sec-head col" data-reveal>
+      <span class="sec-num">04 / 模型 A · Epi-GRN</span>
+      <h2>消息在候选调控边上走</h2>
+      <p>下面是 <span class="mono" data-fill="example.gene">—</span> 周围的一张真实子图。点一个节点当源；层数滑条控制消息传递次数；「打乱」做保持度数的双边交换——算法与基准对照相同。</p>
+    </div>
+    <figure class="fig" data-reveal>
+      <div class="fig__frame">
+        <div class="ctl-row">
+          <label>层数 <input id="mpLayers" type="range" min="0" max="3" value="1"> <b id="mpLayersVal">1</b></label>
+          <button type="button" class="btn" id="mpShuffle" aria-pressed="false">打乱边（对照）</button>
+        </div>
+        <canvas id="mp" class="field" width="980" height="480"></canvas>
+        <div class="readout">
+          <div><dt>源</dt><dd id="mpSource">—</dd></div>
+          <div><dt>到达</dt><dd id="mpReached">—</dd></div>
+          <div><dt>边</dt><dd id="mpEdges">—</dd></div>
+        </div>
+      </div>
+      <figcaption><b>真实计算。</b> 与模型相同的按发送者取平均传播；权重取单位阵，所以你看到的是「信号能走到哪」，不是训练后的输出。合成的只有布局。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="col-wide">
+    <div class="sec-head col" data-reveal>
+      <span class="sec-num">05 / 模型 B · Epi-Direct</span>
+      <h2>顺式元件变成 token，注意力池化成一个基因向量</h2>
+      <p>仍是 <span class="mono" data-fill="example.gene">—</span> 的真实 token。「训练后」用该臂最终检查点的注意力；「手调」用下面的偏好做 softmax（算法是真的，偏好是你调的）。</p>
+    </div>
+    <figure class="fig" data-reveal>
+      <div class="fig__frame">
+        <div class="ctl-row">
+          <div class="seg">
+            <button type="button" class="btn" id="poolTrained" aria-pressed="true">训练后注意力</button>
+            <button type="button" class="btn" id="poolManual" aria-pressed="false">手调偏好</button>
+          </div>
+        </div>
+        <canvas id="pool" class="field tall" width="980" height="520"></canvas>
+        <div class="slider-row">
+          <label>启动子 <input id="pwPromoter" type="range" min="0" max="5" step="0.1" value="2"></label>
+          <label>开放度 <input id="pwAccess" type="range" min="0" max="5" step="0.1" value="1"></label>
+          <label>环连 <input id="pwLoop" type="range" min="0" max="5" step="0.1" value="1.5"></label>
+          <label>距离惩罚 <input id="pwDist" type="range" min="0" max="5" step="0.1" value="1"></label>
+          <label>因子结合 <input id="pwChip" type="range" min="0" max="5" step="0.1" value="1"></label>
+        </div>
+        <div class="readout">
+          <div><dt>启动子质量</dt><dd id="poolProm">—</dd></div>
+          <div><dt>环连质量</dt><dd id="poolLoop">—</dd></div>
+          <div><dt>邻近质量</dt><dd id="poolNear">—</dd></div>
+          <div><dt>有效 token 数</dt><dd id="poolEff">—</dd></div>
+        </div>
+      </div>
+      <figcaption><b>真实计算。</b> softmax 与加权求和在浏览器里完成；训练后权重来自 <code>epi-direct-s42</code> 的最终检查点。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sec-head" data-reveal>
+      <span class="sec-num">06 / 接口</span>
+      <h2>零初始化门控：先验只能赢，不能一上来就毁骨架</h2>
+    </div>
+    <div class="eq" data-reveal>
+      扰动 token ← 标签嵌入 + <span class="pert">W<sub>p</sub></span> · z<sub>敲除基因</span>
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      基因 g 的读出 ← q(h) · k(z<sub>g</sub>) / √d
+    </div>
+    <div class="prose" data-reveal>
+      <p>
+        <code>W<sub>p</sub></code>、读出相关的线性层，以及 Epi-GRN 的边支持项，全部从零开始。
+        所以第 0 步时两个模型与无先验骨架输出相同；只有当先验真能降低能量距离损失时，这些路径才会长起来。
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sec-head" data-reveal>
+      <span class="sec-num">07 / 对照</span>
+      <h2>打乱结构，而不是丢掉特征</h2>
+    </div>
+    <ul class="steps" data-reveal>
+      <li><span class="id"><b>Epi-GRN</b>换边</span><div class="body"><p>每类关系做保持度数的双边交换；节点特征不动。真实边被保留的比例写在先验摘要里。</p></div></li>
+      <li><span class="id"><b>Epi-Direct</b>换集合</span><div class="body"><p>整套 token 按基因置换重挂；单个 token 内部的特征不变。</p></div></li>
+      <li><span class="id"><b>骨架</b></span><div class="body"><p>同一套 Transformer，完全关掉先验路径。</p></div></li>
+      <li><span class="id"><b>STATE 基线</b></span><div class="body"><p>官方 <code>state_sm</code>，以及 <code>perturb_mean</code> / <code>context_mean</code>，同一 TOML、同一 cell-eval 协议。</p></div></li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="col-wide">
+    <div class="sec-head col" data-reveal>
+      <span class="sec-num">08 / 结果</span>
+      <h2>与 STATE 在 cell-eval 上的配对比较</h2>
+      <p>协议对齐 <code>state tx predict</code>：profile=full，跳过 pearson_edistance 与 clustering_agreement；预测与真实裁到 [0, 14]。下面是 seed 42、20&nbsp;000 步预算下的实测均值。</p>
+    </div>
+    <figure class="fig" data-reveal>
+      <div class="fig__frame">
+        <div class="ctl-row">
+          <div class="seg">
+            <button type="button" class="btn" id="resK562" aria-pressed="true">留出 K562</button>
+            <button type="button" class="btn" id="resRpe1" aria-pressed="false">留出 RPE1</button>
+          </div>
+        </div>
+        <canvas id="resChart" class="field" width="980" height="520"></canvas>
+        <div id="resLegend"></div>
+      </div>
+      <figcaption><b>实测数字。</b> 点是相对 STATE 的相对增益，横线是扰动上的配对自助区间。正方向 = 优于 STATE。</figcaption>
+    </figure>
+    <div class="tblwrap" id="resTable" data-reveal style="margin-top:18px"></div>
+    <div class="callout" data-reveal style="margin-top:22px">
+      <h3>怎么读这些数</h3>
+      <p>
+        在表观匹配的 <strong>K562 留出</strong>上，Epi-GRN / Epi-Direct 相对 STATE 在表达、区分和多数差异表达指标上更好；
+        但 <strong>打乱先验</strong> 常常与真实先验接近甚至略好——说明在本预算、本因子覆盖下，先验的几何未必稳定贡献，
+        骨架本身已经很强。<code>context_mean</code> 在若干表达指标上仍是强基线。
+      </p>
+      <p>
+        在 <strong>RPE1 留出</strong>上，先验来自 K562，属于跨细胞系迁移。Epi-Direct 的 pearson_delta 与部分 DE 重叠更好，
+        但 STATE 在部分召回类指标上仍有优势。单种子、20k 步、~18M 参数对 ~36M 可训练参数的 STATE-sm，不能外推到论文规模训练。
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sec-head" data-reveal>
+      <span class="sec-num">09 / 边界</span>
+      <h2>这页能说明什么，不能说明什么</h2>
+    </div>
+    <div class="prose" data-reveal>
+      <p>
+        能说明：同一套公开表观证据可以接到 STATE 风格的集合到集合模型上；接口与评分可以和官方 CLI 对齐；
+        在该设定下可以逐指标比较。
+      </p>
+      <p>
+        不能说明：表观先验在任意预算下都优于无先验；K562 表观能无条件迁移到任意细胞系；
+        25 个源因子覆盖了相关调控；单次随机种子代表方差。仓库里的 <code>results/</code> 只含汇总表，不含逐细胞矩阵或权重。
+      </p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="repro">
+<pre><span class="c"># 在同一基准上复现比较（数据路径按你的服务器调整）</span>
+pip install -e ".[eval,state]"
+epiduo prep  ...
+epiduo prior ...
+epiduo train --model grn    --prior ... --split k562 --output runs/k562/epi-grn-s42
+epiduo predict --run runs/k562/epi-grn-s42
+epiduo eval    --pred ... --real ... --genes benchmark/genes.csv --output .../cell-eval
+epiduo compare --reference state --arm state=... --arm epi_grn=... --output compare/k562</pre>
+    </div>
+    <div class="foot-note">
+      <span>教程与 CLI 见仓库 <a href="../README.md">README</a> · 原理页数据来自 <code>results/</code></span>
+      <span>编码风格参照 <a href="https://github.com/kainblue100/virtual-cell-explainer">virtual-cell-explainer</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="results.js"></script>
+<script>
+(function () {
+  var p = (window.EPIDUO || {}).prior || {};
+  var edges = p.edges || {};
+  var total = Object.keys(edges).reduce(function (a, k) { return a + edges[k]; }, 0);
+  var el = document.getElementById('edgeTotal');
+  if (el) el.textContent = total ? total.toLocaleString('en-US') : '—';
+})();
+</script>
+<script src="app.js"></script>
+</body>
+</html>

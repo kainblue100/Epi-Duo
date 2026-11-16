@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Epi-Duo · 进度面板</title>
+<style>
+:root{
+  --ink-950:#07090c; --ink-900:#0b0e13; --ink-850:#10141b; --ink-800:#151a22; --ink-700:#212833; --ink-500:#2e3745;
+  --text-100:#eef2f6; --text-300:#aeb8c4; --text-500:#7c8798; --text-700:#586273;
+  --ctl:#2fc7bd; --pert:#f2a13c; --ok:#5ec962; --bad:#ef6a5b; --warn:#f2c94c;
+  --mono:"IBM Plex Mono","Cascadia Mono",Consolas,ui-monospace,Menlo,monospace;
+  --sans:"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{margin:0;background:var(--ink-950);color:var(--text-100);font-family:var(--sans);font-size:14px;line-height:1.55}
+.wrap{width:min(1480px,100% - 36px);margin-inline:auto}
+header.top{position:sticky;top:0;z-index:5;background:rgba(7,9,12,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--ink-700)}
+header.top .wrap{display:flex;align-items:center;gap:18px;padding:12px 0;flex-wrap:wrap}
+h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.01em}
+h1 small{font-family:var(--mono);font-size:11.5px;color:var(--text-500);font-weight:400;margin-left:10px}
+.live{margin-left:auto;display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--text-300)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--text-700);flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 0 rgba(94,201,98,.6);animation:pulse 2s infinite}
+.dot.bad{background:var(--bad)}
+@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(94,201,98,0)}100%{box-shadow:0 0 0 0 rgba(94,201,98,0)}}
+@media (prefers-reduced-motion:reduce){.dot.ok{animation:none}}
+button,select{font:inherit;color:var(--text-100);background:var(--ink-800);border:1px solid var(--ink-500);padding:5px 11px;cursor:pointer}
+button:hover,select:hover{border-color:var(--text-500)}
+button[aria-pressed="true"]{background:var(--pert);border-color:var(--pert);color:#141006}
+.seg{display:inline-flex}.seg button + button{border-left:0}
+main{padding:20px 0 60px;display:grid;gap:22px}
+section > h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-500);font-weight:600;margin:0 0 10px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+section > h2 span{letter-spacing:0;text-transform:none;font-weight:400;font-size:12px;color:var(--text-700)}
+section > h2 .right{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--text-300)}
+.panel{background:var(--ink-850);border:1px solid var(--ink-700)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--text-500)}
+
+/* alerts */
+#alerts{display:grid;gap:6px}
+.alert{padding:9px 14px;border:1px solid;font-size:13px;display:flex;gap:10px;align-items:baseline}
+.alert b{font-family:var(--mono);font-size:11px;letter-spacing:.08em}
+.alert.bad{border-color:var(--bad);background:rgba(239,106,91,.09)} .alert.bad b{color:var(--bad)}
+.alert.warn{border-color:var(--warn);background:rgba(242,201,76,.07)} .alert.warn b{color:var(--warn)}
+
+/* overall */
+.overall{display:grid;grid-template-columns:minmax(230px,300px) 1fr;gap:1px;background:var(--ink-700)}
+@media (max-width:860px){.overall{grid-template-columns:1fr}}
+.overall > div{background:var(--ink-850);padding:18px 20px}
+.big{font-family:var(--mono);font-size:46px;line-height:1;font-weight:600;letter-spacing:-.02em}
+.big small{font-size:18px;color:var(--text-500);font-weight:400}
+.bar{height:6px;background:var(--ink-700);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--pert);transition:width .6s ease}
+.bar i.ok{background:var(--ok)} .bar i.ctl{background:var(--ctl)} .bar i.bad{background:var(--bad)} .bar i.idle{background:var(--ink-500)}
+.overall .bar{margin:14px 0 12px;height:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px;color:var(--text-300)}
+.kv dt{color:var(--text-500)} .kv dd{margin:0;font-family:var(--mono);text-align:right}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:9px;align-items:start}
+.steps .mark{width:20px;height:20px;border:1.5px solid var(--ink-500);border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;color:var(--text-500);margin-top:1px}
+.steps li.done .mark{background:var(--ok);border-color:var(--ok);color:#06150a}
+.steps li.active .mark{border-color:var(--pert);color:var(--pert);box-shadow:0 0 0 3px rgba(242,161,60,.16)}
+.steps b{display:block;font-weight:600;font-size:13.5px}
+.steps li:not(.done):not(.active) b{color:var(--text-500)}
+.steps span{display:block;font-size:12px;color:var(--text-500);font-family:var(--mono)}
+.steps li.active span{color:var(--pert)}
+
+/* resources */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--ink-700);border:1px solid var(--ink-700)}
+.card{background:var(--ink-850);padding:14px 16px 12px;display:grid;gap:6px}
+.card h3{margin:0;font-size:12px;color:var(--text-500);font-weight:500;display:flex;justify-content:space-between;gap:8px}
+.card h3 em{font-style:normal;font-family:var(--mono);color:var(--text-700)}
+.card .value{font-family:var(--mono);font-size:25px;font-weight:600;line-height:1.15}
+.card .value small{font-size:12.5px;color:var(--text-500);font-weight:400;margin-left:6px}
+.card .sub{font-family:var(--mono);font-size:11.5px;color:var(--text-500);display:flex;justify-content:space-between;gap:8px}
+.card canvas{width:100%;height:38px;display:block}
+.good{color:var(--ok)} .warnc{color:var(--warn)} .badc{color:var(--bad)}
+
+/* runs */
+.splits{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:16px}
+@media (max-width:620px){.splits{grid-template-columns:1fr}}
+.split-head{padding:12px 16px;border-bottom:1px solid var(--ink-700);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.split-head b{font-size:14.5px}
+.split-head .eta{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--pert)}
+.split-head p{flex-basis:100%;margin:0;font-size:12px;color:var(--text-500)}
+table{border-collapse:collapse;width:100%}
+.runs td,.runs th{padding:8px 10px;border-bottom:1px solid var(--ink-700);text-align:left;white-space:nowrap}
+.runs th{font-size:11px;color:var(--text-700);font-weight:500;letter-spacing:.06em}
+.runs tr:last-child td{border-bottom:0}
+.runs tbody tr{cursor:pointer}
+.runs tbody tr:hover td{background:rgba(255,255,255,.025)}
+.runs tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--pert)}
+.runs td.r,.runs th.r{text-align:right}
+.runs td.prog{width:38%;min-width:150px}
+.runs .bar{margin-bottom:3px}
+.runs .ptext{font-family:var(--mono);font-size:11px;color:var(--text-500);display:flex;justify-content:space-between}
+.arm{display:flex;align-items:center;gap:8px;font-weight:500}
+.arm i{width:9px;height:9px;flex:none}
+.arm small{color:var(--text-700);font-weight:400;font-family:var(--mono);font-size:11px}
+.chip{font-family:var(--mono);font-size:11px;padding:2px 7px;border:1px solid var(--ink-500);color:var(--text-500);display:inline-block}
+.chip.training{border-color:var(--pert);color:var(--pert)} .chip.predicting{border-color:var(--pert);color:var(--pert)}
+.chip.evaluating{border-color:var(--ctl);color:var(--ctl)} .chip.predicted{border-color:var(--text-500);color:var(--text-300)}
+.chip.scored{border-color:var(--ok);color:var(--ok)}
+.chip.failed,.chip.eval_failed,.chip.interrupted{border-color:var(--bad);color:var(--bad)}
+
+/* curves, results, logs */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:16px}
+@media (max-width:520px){.charts{grid-template-columns:1fr}}
+.chart h3{margin:0;padding:10px 16px;font-size:13px;font-weight:500;border-bottom:1px solid var(--ink-700);color:var(--text-300)}
+.chart canvas{width:100%;height:250px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--text-300);margin-top:8px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;margin-right:6px;vertical-align:middle}
+.legend i.dash{border-top-style:dashed}
+.note{font-size:12px;color:var(--text-500);margin:8px 0 0;max-width:110ch}
+.results{overflow-x:auto}
+.results td,.results th{padding:7px 12px;border-bottom:1px solid var(--ink-700);text-align:right;font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.results th{color:var(--text-500);font-weight:500;font-size:11.5px}
+.results td:first-child,.results th:first-child{text-align:left;color:var(--text-300);position:sticky;left:0;background:var(--ink-850)}
+.results td.best{color:var(--ok);font-weight:600}
+.results td.na{color:var(--text-700)}
+.results tr:last-child td{border-bottom:0}
+#logBox{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text-300);white-space:pre-wrap;word-break:break-all;min-height:150px;max-height:330px;overflow:auto}
+#logBox .t{color:var(--bad)} #logBox .d{color:var(--ok)}
+footer{color:var(--text-700);font-size:12px;font-family:var(--mono);padding-bottom:30px}
+.empty{padding:26px 16px;color:var(--text-500);text-align:center}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <h1>Epi-Duo · 进度面板<small id="where"></small></h1>
+  <div class="live"><span class="dot" id="dot"></span><span id="fresh">正在连接…</span><button id="refresh" type="button">立即刷新</button></div>
+</div></header>
+
+<main class="wrap">
+  <div id="alerts"></div>
+
+  <section>
+    <h2>总进度 <span>十个交付环节；百分比按各环节的大致工作量加权</span></h2>
+    <div class="overall panel">
+      <div>
+        <div class="big num" id="pct">–<small>%</small></div>
+        <div class="bar"><i id="pctBar" style="width:0"></i></div>
+        <dl class="kv" id="overallKv"></dl>
+      </div>
+      <div><ol class="steps" id="steps"></ol></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>服务器资源 <span id="resNote"></span></h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section>
+    <h2>训练 · 预测 · 评分 <span>点一行可在下方查看它的日志</span>
+      <span class="right" id="seedPick"></span></h2>
+    <div class="splits" id="splits"></div>
+  </section>
+
+  <section>
+    <h2>损失曲线 <span>Epi-Duo 各臂的能量距离损失；STATE 用自己的损失实现，尺度不同，不画在一起</span>
+      <span class="right"><span class="seg"><button type="button" id="curveVal" aria-pressed="true">验证集</button><button type="button" id="curveTrain" aria-pressed="false">训练集</button></span></span></h2>
+    <div class="charts" id="charts"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <h2>cell-eval 结果 <span>评完一个臂就出现一列；数值是该臂在全部留出扰动上的平均，绿色为当前最好</span></h2>
+    <div class="splits" id="results"></div>
+    <p class="note">这里只是单个随机种子的均值，用来尽早发现异常。带置信区间和配对检验的正式对比由 <code>epiduo compare</code> 生成，结论以它为准。</p>
+  </section>
+
+  <section>
+    <h2>日志 <span class="right"><label><input type="checkbox" id="follow" checked> 跟随最新</label><select id="logPick"></select></span></h2>
+    <div class="panel"><pre id="logBox">等待数据…</pre></div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var ARMS = {
+    state_sm: { label: 'STATE', note: '官方 state tx train', color: '#eef2f6' },
+    backbone: { label: '骨架（无先验）', note: 'Epi-Duo backbone', color: '#7c8798' },
+    'epi-grn': { label: 'Epi-GRN', note: '模型 A · 真实网络', color: '#f2a13c' },
+    'epi-grn-shuffled': { label: 'Epi-GRN 打乱', note: '保持度数换边', color: '#a76b1e', dash: true },
+    'epi-direct': { label: 'Epi-Direct', note: '模型 B · 真实 token', color: '#2fc7bd' },
+    'epi-direct-shuffled': { label: 'Epi-Direct 打乱', note: '基因间重排', color: '#1b7f79', dash: true },
+    perturb_mean: { label: 'perturb_mean', note: 'STATE 基线', color: '#8d7bd8' },
+    context_mean: { label: 'context_mean', note: 'STATE 基线', color: '#5a6bb0' }
+  };
+  var STAGE = { queued: '排队', not_started: '未开始', training: '训练中', predicting: '预测中', predicted: '待评分',
+    evaluating: '评分中', scored: '已完成', failed: '失败', eval_failed: '评分失败', interrupted: '中断', unknown: '未知' };
+  var SPLIT = {
+    k562: { title: '留出 K562', note: '表观数据与测试细胞系一致' },
+    rpe1: { title: '留出 RPE1', note: 'K562 的表观数据跨细胞系迁移到 RPE1' }
+  };
+  var METRICS = [['pearson_delta', 1, '表达'], ['mse', 0, '表达'], ['mae', 0, '表达'], ['discrimination_score_l1', 1, '区分'],
+    ['overlap_at_N', 1, '差异表达'], ['precision_at_N', 1, '差异表达'], ['de_direction_match', 1, '差异表达'],
+    ['de_spearman_lfc_sig', 1, '差异表达'], ['de_spearman_sig', 1, '差异表达'], ['de_sig_genes_recall', 1, '差异表达'],
+    ['pr_auc', 1, '差异表达'], ['roc_auc', 1, '差异表达']];
+  var EVAL_DEFAULT = 16;   // minutes per arm until one has been timed
+
+  var state = null, seed = null, curve = 'val_loss', pickedLog = null, selectedRun = null;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function n(v, d) { return v === null || v === undefined || !isFinite(v) ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d === undefined ? 0 : d, minimumFractionDigits: d || 0 }); }
+  function dur(min) {
+    if (min === null || min === undefined || !isFinite(min)) return '—';
+    if (min < 1) return '<1 分';
+    return min < 60 ? Math.round(min) + ' 分' : Math.floor(min / 60) + ' 时 ' + Math.round(min % 60) + ' 分';
+  }
+  function clock(t) { var d = new Date(t * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function ago(sec) { return sec < 90 ? Math.round(sec) + ' 秒前' : sec < 5400 ? Math.round(sec / 60) + ' 分钟前' : (sec / 3600).toFixed(1) + ' 小时前'; }
+
+  /* ---------- estimates ---------- */
+  function runFraction(r) {
+    var train = Math.min(1, (r.step || 0) / Math.max(r.max_steps || 1, 1));
+    switch (r.stage) {
+      case 'scored': return 1;
+      case 'evaluating': return 0.75 + 0.24 * Math.min(1, (r.eval_seconds || 0) / 60 / evalMinutes(r));
+      case 'predicted': case 'eval_failed': return 0.75;
+      case 'predicting': return 0.72;
+      case 'training': case 'failed': case 'interrupted': return 0.7 * train;
+      default: return 0;
+    }
+  }
+  function evalMinutes(r) {
+    var d = state.snapshot.drivers.filter(function (x) { return x.split === r.split && x.seed === r.seed; })[0];
+    return (d && d.eval_minutes) || EVAL_DEFAULT;
+  }
+  /* Rough time left for one driver: STATE trains in the background while the other arms run one after another;
+     finished arms are scored one at a time, and a second scorer joins once STATE has finished. */
+  function driverEta(driver, runs) {
+    var E = driver.eval_minutes || EVAL_DEFAULT, seq = 0, work = 0, stateReady = 0, stateEval = 0, armTimes = [];
+    runs.forEach(function (r) {
+      if (r.kind === 'epiduo' && r.minutes && r.step >= r.max_steps) armTimes.push(r.minutes + 1.5);
+    });
+    var armTime = armTimes.length ? armTimes.reduce(function (a, b) { return a + b; }) / armTimes.length : 9;
+    runs.forEach(function (r) {
+      var left = r.stage === 'scored' ? 0 : r.stage === 'evaluating' ? Math.max(E - (r.eval_seconds || 0) / 60, 1) : E;
+      if (r.arm === 'state_sm') {
+        stateReady = r.stage === 'training' ? (r.eta_minutes === undefined ? 70 : r.eta_minutes) + 3 : r.stage === 'queued' ? 75 : r.stage === 'predicting' ? 2 : 0;
+        stateEval = left;
+        return;
+      }
+      work += left;
+      if (r.stage === 'training') seq += (r.eta_minutes === undefined ? armTime : r.eta_minutes) + 1;
+      else if (r.stage === 'queued') seq += r.kind === 'epiduo' ? armTime : 2;
+      else if (r.stage === 'predicting') seq += 1;
+    });
+    var alone = Math.max(work, seq + (work > 0 ? E : 0));
+    if (alone <= stateReady) return Math.max(stateReady + stateEval, alone);
+    return Math.max(stateReady + (alone - stateReady + stateEval) / 2, stateReady + stateEval, seq + E);
+  }
+
+  /* ---------- sections ---------- */
+  function renderHeader() {
+    var p = state.poll, okNow = p.ok && p.last_success && state.now - p.last_success < Math.max(60, p.interval * 4);
+    $('dot').className = 'dot ' + (okNow ? 'ok' : 'bad');
+    var text = p.last_success ? '服务器数据 ' + ago(state.now - p.last_success + (Date.now() / 1000 - state.fetched)) : '尚未取得数据';
+    if (!p.ok && p.error) text += ' · 连接失败：' + p.error.slice(0, 90);
+    $('fresh').textContent = text;
+    $('where').textContent = state.config.host + ':' + state.config.work;
+  }
+
+  function renderAlerts(S) {
+    var out = [], reserve = state.config.reserve_gib, disk = S.resources.disk;
+    if (!state.poll.ok && state.poll.error) out.push(['bad', '连接', '无法从服务器取数：' + state.poll.error]);
+    if (disk) {
+      var margin = disk.free_gib - reserve;
+      if (margin < 0) out.push(['bad', '磁盘', '可用空间 ' + n(disk.free_gib, 1) + ' GiB，已低于 ' + reserve + ' GiB 保留线']);
+      else if (margin < 10) out.push(['warn', '磁盘', '可用空间距 ' + reserve + ' GiB 保留线只剩 ' + n(margin, 1) + ' GiB']);
+    }
+    S.runs.forEach(function (r) {
+      if (['failed', 'eval_failed', 'interrupted'].indexOf(r.stage) >= 0)
+        out.push(['bad', STAGE[r.stage], SPLIT[r.split].title + ' · ' + (ARMS[r.arm] || {}).label + ' · 种子 ' + r.seed + (r.error ? '：' + r.error : '')]);
+    });
+    S.drivers.forEach(function (d) {
+      var pending = S.runs.some(function (r) { return r.split === d.split && r.seed === d.seed && r.stage !== 'scored'; });
+      if (!d.alive && !d.done && pending && !d.early_eval) out.push(['bad', '驱动', SPLIT[d.split].title + ' 种子 ' + d.seed + ' 的驱动脚本已退出，但还有臂没有评完']);
+      (d.early_eval_log || []).forEach(function (line) { if (line.indexOf('NOT_SCORED') >= 0) out.push(['warn', '评分', line]); });
+    });
+    S.resources.gpus.forEach(function (g) { if (g.temperature >= 85) out.push(['warn', 'GPU ' + g.index, '温度 ' + g.temperature + ' °C']); });
+    $('alerts').innerHTML = out.map(function (a) { return '<div class="alert ' + a[0] + '"><b>' + esc(a[1]) + '</b><span>' + esc(a[2]) + '</span></div>'; }).join('');
+  }
+
+  function renderOverall(S) {
+    var L = state.local, runs = S.runs, total = runs.length || 1;
+    var predicted = runs.filter(function (r) { return ['predicted', 'evaluating', 'scored', 'eval_failed'].indexOf(r.stage) >= 0; }).length;
+    var scored = runs.filter(function (r) { return r.stage === 'scored'; }).length;
+    var trainFrac = runs.reduce(function (a, r) { return a + Math.min(1, runFraction(r) / 0.75); }, 0) / total;
+    var evalFrac = runs.reduce(function (a, r) { return a + Math.max(0, (runFraction(r) - 0.75) / 0.25); }, 0) / total;
+    var compared = ['k562', 'rpe1'].filter(function (s) { return S.stages.compare[s]; }).length;
+    var b = (S.summary.benchmark || {}), p = (S.summary.prior || {});
+    var edges = p.edges ? Object.keys(p.edges).reduce(function (a, k) { return a + p.edges[k]; }, 0) : null;
+    var steps = [
+      ['服务器环境', S.stages.environment ? 1 : 0, 'STATE · cell-eval · PyTorch', 4],
+      ['基准数据', S.stages.benchmark ? 1 : 0, b.cells ? n(b.cells.k562 + b.cells.rpe1) + ' 细胞 · ' + n(b.eligible_perturbations) + ' 扰动' : '', 6],
+      ['表观先验', S.stages.prior ? 1 : 0, edges ? n(edges) + ' 条边 · ' + n(p.atac_elements) + ' 元件' : '', 6],
+      ['训练与预测', trainFrac, predicted + ' / ' + runs.length + ' 个臂', 32],
+      ['cell-eval 评分', evalFrac, scored + ' / ' + runs.length + ' 个臂', 16],
+      ['与 STATE 对比', compared / 2, compared + ' / 2 个划分', 5],
+      ['导出公开结果', L.results ? 1 : S.stages.export ? 0.5 : 0, L.results ? 'results/ 已就绪' : '只导出汇总，不含逐细胞数据', 4],
+      ['教程 README', L.readme ? 1 : 0, 'STATE README 的体例', 9],
+      ['原理说明页', L.explainer ? (L.site_data ? 1 : 0.6) : 0, L.explainer ? (L.site_data ? 'docs/ 已含实测数据' : '页面已写，待填实测结果') : 'docs/index.html', 11],
+      ['GitHub 仓库', L.pushed ? 1 : L.remote ? 0.6 : L.commits ? 0.3 : 0, L.pushed ? '已推送' : L.remote ? '已建仓库，待推送' : L.commits ? L.commits + ' 次本地提交' : '尚未提交', 7]
+    ];
+    var weight = steps.reduce(function (a, s) { return a + s[3]; }, 0);
+    var pct = steps.reduce(function (a, s) { return a + s[1] * s[3]; }, 0) / weight * 100;
+    var firstOpen = -1;
+    $('steps').innerHTML = steps.map(function (s, i) {
+      var cls = s[1] >= 1 ? 'done' : s[1] > 0 ? 'active' : '';
+      if (!cls && firstOpen < 0 && steps.slice(0, i).every(function (x) { return x[1] >= 1; })) { cls = 'active'; firstOpen = i; }
+      return '<li class="' + cls + '"><span class="mark">' + (s[1] >= 1 ? '✓' : i + 1) + '</span><div><b>' + s[0] + '</b><span>' +
+        esc(s[1] > 0 && s[1] < 1 ? Math.round(s[1] * 100) + '% · ' + s[2] : s[2]) + '</span></div></li>';
+    }).join('');
+    $('pct').innerHTML = pct.toFixed(0) + '<small>%</small>';
+    $('pctBar').style.width = pct.toFixed(1) + '%';
+    $('pctBar').className = pct >= 99.5 ? 'ok' : '';
+
+    var etas = S.drivers.map(function (d) {
+      return driverEta(d, runs.filter(function (r) { return r.split === d.split && r.seed === d.seed; }));
+    });
+    var eta = etas.length ? Math.max.apply(null, etas) : 0, active = runs.filter(function (r) { return ['training', 'predicting', 'evaluating'].indexOf(r.stage) >= 0; }).length;
+    var started = S.drivers.map(function (d) { return d.started; }).filter(Boolean);
+    $('overallKv').innerHTML =
+      '<dt>基准剩余（粗估）</dt><dd>' + (eta > 0.5 ? dur(eta) + ' · 约 ' + clock(Date.now() / 1000 + eta * 60) : scored === runs.length && runs.length ? '已全部评完' : '—') + '</dd>' +
+      '<dt>正在运行</dt><dd>' + active + ' 个任务</dd>' +
+      '<dt>已评分</dt><dd>' + scored + ' / ' + runs.length + '</dd>' +
+      (started.length ? '<dt>已运行</dt><dd>' + dur((S.time - Math.min.apply(null, started)) / 60) + '</dd>' : '');
+  }
+
+  function spark(canvas, values, opts) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2), w = canvas.clientWidth || 200, h = canvas.clientHeight || 38;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var g = canvas.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    values = values.filter(function (v) { return v !== null && v !== undefined; });
+    if (values.length < 2) return;
+    var lo = opts.min !== undefined ? opts.min : Math.min.apply(null, values), hi = opts.max !== undefined ? opts.max : Math.max.apply(null, values);
+    if (opts.line !== undefined) { lo = Math.min(lo, opts.line); hi = Math.max(hi, opts.line); }
+    if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
+    var pad = (hi - lo) * 0.08; if (opts.min === undefined) lo -= pad; if (opts.max === undefined) hi += pad;
+    function Y(v) { return h - 2 - (v - lo) / (hi - lo) * (h - 4); }
+    if (opts.line !== undefined) {
+      g.strokeStyle = 'rgba(239,106,91,.8)'; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(0, Y(opts.line)); g.lineTo(w, Y(opts.line)); g.stroke(); g.setLineDash([]);
+    }
+    g.beginPath();
+    values.forEach(function (v, i) { var x = i / (values.length - 1) * w; if (i) g.lineTo(x, Y(v)); else g.moveTo(x, Y(v)); });
+    g.strokeStyle = opts.color; g.lineWidth = 1.5; g.stroke();
+    g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fillStyle = opts.fill; g.fill();
+  }
+
+  function renderResources(S) {
+    var R = S.resources, H = state.history, reserve = state.config.reserve_gib, html = '';
+    R.gpus.forEach(function (g) {
+      html += '<div class="card"><h3>GPU ' + g.index + '<em>' + esc(g.name.replace('NVIDIA GeForce ', '')) + '</em></h3>' +
+        '<div class="value num">' + n(g.utilization) + '%<small>利用率</small></div><canvas data-spark="gpu' + g.index + '"></canvas>' +
+        '<div class="sub"><span>显存 ' + n(g.memory_used_mib / 1024, 1) + ' / ' + n(g.memory_total_mib / 1024, 0) + ' GiB</span><span>' + n(g.temperature) + ' °C</span></div></div>';
+    });
+    if (R.disk) {
+      var margin = R.disk.free_gib - reserve, cls = margin < 0 ? 'badc' : margin < 10 ? 'warnc' : 'good';
+      html += '<div class="card"><h3>磁盘可用<em>/mnt/storage</em></h3><div class="value num">' + n(R.disk.free_gib, 1) + '<small>GiB</small></div>' +
+        '<canvas data-spark="disk"></canvas><div class="sub"><span class="' + cls + '">距保留线 ' + (margin >= 0 ? '+' : '') + n(margin, 1) + ' GiB</span><span>本项目 runs ' + n(R.runs_gib, 1) + ' GiB</span></div></div>';
+    }
+    var load = R.load[0], lcls = load > R.cpus * 1.5 ? 'warnc' : '';
+    html += '<div class="card"><h3>CPU 负载<em>' + R.cpus + ' 核 · 共享机器</em></h3><div class="value num ' + lcls + '">' + n(load, 1) + '<small>1 分钟均值</small></div>' +
+      '<canvas data-spark="load"></canvas><div class="sub"><span>5 分 ' + n(R.load[1], 1) + ' · 15 分 ' + n(R.load[2], 1) + '</span><span>' +
+      (R.memory ? '内存可用 ' + n(R.memory.available_gib, 0) + ' / ' + n(R.memory.total_gib, 0) + ' GiB' : '') + '</span></div></div>';
+    $('cards').innerHTML = html;
+    document.querySelectorAll('[data-spark]').forEach(function (cv) {
+      var key = cv.getAttribute('data-spark');
+      if (key.indexOf('gpu') === 0) {
+        var i = +key.slice(3);
+        spark(cv, H.map(function (s) { return s.gpu[i] ? s.gpu[i][0] : null; }), { min: 0, max: 100, color: '#f2a13c', fill: 'rgba(242,161,60,.12)' });
+      } else if (key === 'disk') spark(cv, H.map(function (s) { return s.disk; }), { line: reserve, color: '#2fc7bd', fill: 'rgba(47,199,189,.10)' });
+      else spark(cv, H.map(function (s) { return s.load; }), { min: 0, color: '#aeb8c4', fill: 'rgba(174,184,196,.08)' });
+    });
+    if (H.length > 1) $('resNote').textContent = '曲线为最近 ' + dur((H[H.length - 1].t - H[0].t) / 60) + '；磁盘图中的红色虚线是 ' + reserve + ' GiB 保留线';
+  }
+
+  function seeds(S) { var s = {}; S.drivers.forEach(function (d) { s[d.seed] = 1; }); return Object.keys(s).map(Number).sort(); }
+
+  function renderRuns(S) {
+    var all = seeds(S);
+    if (seed === null || all.indexOf(seed) < 0) seed = all.length ? all[all.length - 1] : null;
+    $('seedPick').innerHTML = all.length > 1 ? '种子 <span class="seg">' + all.map(function (s) {
+      return '<button type="button" data-seed="' + s + '" aria-pressed="' + (s === seed) + '">' + s + '</button>'; }).join('') + '</span>' : (all.length ? '种子 ' + all[0] : '');
+    var html = '';
+    S.drivers.filter(function (d) { return d.seed === seed; }).forEach(function (d) {
+      var runs = S.runs.filter(function (r) { return r.split === d.split && r.seed === d.seed; });
+      var eta = driverEta(d, runs), done = runs.every(function (r) { return r.stage === 'scored'; });
+      html += '<div class="panel"><div class="split-head"><b>' + SPLIT[d.split].title + '</b><span class="chip ' + (done ? 'scored' : d.alive || d.early_eval ? 'training' : '') + '">' +
+        (done ? '全部完成' : d.alive ? '驱动运行中' : d.early_eval ? '收尾评分中' : '驱动已停止') + '</span>' +
+        '<span class="eta">' + (done ? '' : '剩余约 ' + dur(eta) + ' · ' + clock(Date.now() / 1000 + eta * 60)) + '</span>' +
+        '<p>' + SPLIT[d.split].note + (d.early_eval_log && d.early_eval_log.length ? ' · 旁路评分：' + esc(d.early_eval_log[d.early_eval_log.length - 1]) : '') + '</p></div>' +
+        '<table class="runs"><thead><tr><th>模型臂</th><th>状态</th><th>进度</th><th class="r">验证损失</th><th class="r">速度</th><th class="r">剩余</th></tr></thead><tbody>';
+      runs.forEach(function (r) {
+        var a = ARMS[r.arm] || { label: r.arm, note: '', color: '#888' }, f = runFraction(r), key = r.split + '/' + r.arm + '/' + r.seed;
+        var cls = r.stage === 'scored' ? 'ok' : r.stage === 'evaluating' || r.stage === 'predicted' ? 'ctl' : ['failed', 'eval_failed', 'interrupted'].indexOf(r.stage) >= 0 ? 'bad' : '';
+        var left = '', right = '', remain = '—';
+        if (r.stage === 'training') { left = n(r.step) + ' / ' + n(r.max_steps) + ' 步'; right = Math.round(r.step / r.max_steps * 100) + '%'; remain = dur(r.eta_minutes); }
+        else if (r.stage === 'evaluating') {
+          left = r.eval_bar ? (r.eval_bar.label.indexOf('differential') >= 0 ? '差异表达 ' : '') + r.eval_bar.done + ' / ' + r.eval_bar.total : 'cell-eval';
+          right = '已 ' + dur((r.eval_seconds || 0) / 60); remain = dur(Math.max(evalMinutes(r) - (r.eval_seconds || 0) / 60, 1));
+        } else if (r.stage === 'scored') { left = '训练 ' + (r.minutes ? dur(r.minutes) : '—'); right = r.scored_at ? clock(r.scored_at) + ' 评完' : ''; remain = '✓'; }
+        else if (r.stage === 'predicted') { left = '预测已写出，等待评分'; }
+        else if (r.stage === 'predicting') { left = '写出预测'; }
+        else if (r.error) { left = r.error.slice(0, 60); }
+        html += '<tr data-run="' + key + '" data-log="' + esc(r.stage === 'evaluating' || r.stage === 'eval_failed' ? 'eval-' + r.name + '-' + r.split + '.log' : r.log || '') + '"' + (selectedRun === key ? ' class="sel"' : '') + '>' +
+          '<td><div class="arm"><i style="background:' + a.color + '"></i><span>' + a.label + '<br><small>' + a.note + '</small></span></div></td>' +
+          '<td><span class="chip ' + r.stage + '">' + (STAGE[r.stage] || r.stage) + '</span></td>' +
+          '<td class="prog"><div class="bar"><i class="' + cls + '" style="width:' + (f * 100).toFixed(1) + '%"></i></div><div class="ptext"><span>' + esc(left) + '</span><span>' + esc(right) + '</span></div></td>' +
+          '<td class="r num">' + (r.val_loss === undefined || r.val_loss === null ? '—' : n(r.val_loss, 3)) + '</td>' +
+          '<td class="r num">' + (r.steps_per_minute && r.stage === 'training' ? n(r.steps_per_minute) + ' 步/分' : '—') + '</td>' +
+          '<td class="r num">' + remain + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    });
+    $('splits').innerHTML = html || '<div class="panel empty">服务器上还没有启动任何基准驱动。</div>';
+  }
+
+  function renderCurves(S) {
+    var host = $('charts'), splits = S.drivers.filter(function (d) { return d.seed === seed; }).map(function (d) { return d.split; });
+    if (host.children.length !== splits.length) {
+      host.innerHTML = splits.map(function (s) { return '<div class="panel chart"><h3>' + SPLIT[s].title + '</h3><canvas data-curve="' + s + '"></canvas></div>'; }).join('');
+    }
+    var shown = {};
+    splits.forEach(function (split) {
+      var cv = host.querySelector('[data-curve="' + split + '"]'); if (!cv) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+      cv.width = w * dpr; cv.height = h * dpr;
+      var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+      var runs = S.runs.filter(function (r) { return r.split === split && r.seed === seed && r.kind === 'epiduo' && r.history.length; });
+      var L = 52, Rm = 16, T = 14, B = 30, maxStep = 1000, lo = Infinity, hi = -Infinity;
+      runs.forEach(function (r) {
+        maxStep = Math.max(maxStep, r.max_steps);
+        r.history.forEach(function (p) { if (p[curve] !== undefined) { lo = Math.min(lo, p[curve]); hi = Math.max(hi, p[curve]); } });
+      });
+      g.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--mono'); g.fillStyle = '#586273';
+      if (!runs.length) { g.textAlign = 'center'; g.fillText('这个划分的 Epi-Duo 臂还没有写出验证点', w / 2, h / 2); return; }
+      var pad = Math.max((hi - lo) * 0.1, 0.005); lo -= pad; hi += pad;
+      function X(s) { return L + s / maxStep * (w - L - Rm); }
+      function Y(v) { return T + (hi - v) / (hi - lo) * (h - T - B); }
+      g.strokeStyle = '#212833'; g.lineWidth = 1; g.textAlign = 'right';
+      for (var i = 0; i <= 4; i++) {
+        var v = lo + (hi - lo) * i / 4; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - Rm, Y(v)); g.stroke(); g.fillText(v.toFixed(3), L - 8, Y(v) + 4);
+      }
+      g.textAlign = 'center';
+      for (var s = 0; s <= maxStep; s += maxStep / 4) g.fillText(n(s), X(s), h - 10);
+      runs.forEach(function (r) {
+        var a = ARMS[r.arm]; shown[r.arm] = 1;
+        g.strokeStyle = a.color; g.lineWidth = r.arm === 'backbone' ? 1.4 : 1.9; g.setLineDash(a.dash ? [5, 4] : []);
+        g.beginPath();
+        var started = false;
+        r.history.forEach(function (p) { if (p[curve] === undefined) return; if (started) g.lineTo(X(p.step), Y(p[curve])); else { g.moveTo(X(p.step), Y(p[curve])); started = true; } });
+        g.stroke(); g.setLineDash([]);
+        var last = r.history[r.history.length - 1];
+        if (last[curve] !== undefined) { g.fillStyle = a.color; g.beginPath(); g.arc(X(last.step), Y(last[curve]), 3, 0, 6.2832); g.fill(); }
+      });
+    });
+    $('legend').innerHTML = Object.keys(ARMS).filter(function (k) { return shown[k]; }).map(function (k) {
+      return '<span><i class="' + (ARMS[k].dash ? 'dash' : '') + '" style="border-color:' + ARMS[k].color + '"></i>' + ARMS[k].label + '</span>'; }).join('');
+  }
+
+  function renderResults(S) {
+    var html = '';
+    S.drivers.filter(function (d) { return d.seed === seed; }).forEach(function (d) {
+      var runs = S.runs.filter(function (r) { return r.split === d.split && r.seed === d.seed; });
+      var scored = runs.filter(function (r) { return r.metrics; });
+      html += '<div class="panel results"><div class="split-head"><b>' + SPLIT[d.split].title + '</b><span class="muted num">' + scored.length + ' / ' + runs.length + ' 个臂已评分</span></div>';
+      if (!scored.length) { html += '<div class="empty">还没有评完的臂。每个臂的 cell-eval 约需 ' + (d.eval_minutes ? Math.round(d.eval_minutes) : EVAL_DEFAULT) + ' 分钟。</div></div>'; return; }
+      html += '<table><thead><tr><th>指标</th>' + runs.map(function (r) { return '<th>' + (ARMS[r.arm] || {}).label + '</th>'; }).join('') + '</tr></thead><tbody>';
+      METRICS.forEach(function (m) {
+        var vals = scored.map(function (r) { return r.metrics[m[0]]; }).filter(function (v) { return v !== null && v !== undefined && isFinite(v); });
+        if (!vals.length) return;
+        var best = m[1] ? Math.max.apply(null, vals) : Math.min.apply(null, vals);
+        html += '<tr><td>' + m[0] + ' ' + (m[1] ? '↑' : '↓') + '</td>' + runs.map(function (r) {
+          var v = r.metrics ? r.metrics[m[0]] : undefined;
+          if (v === undefined || v === null || !isFinite(v)) return '<td class="na">' + (r.metrics ? '未定义' : '·') + '</td>';
+          return '<td class="' + (v === best && vals.length > 1 ? 'best' : '') + '">' + v.toFixed(4) + '</td>';
+        }).join('') + '</tr>';
+      });
+      html += '</tbody></table></div>';
+    });
+    $('results').innerHTML = html;
+  }
+
+  function renderLogs(S) {
+    var pick = $('logPick'), names = S.logs.map(function (l) { return l.name; });
+    if (pick.getAttribute('data-names') !== names.join('|')) {
+      pick.innerHTML = names.map(function (name) { return '<option value="' + esc(name) + '">' + esc(name) + '</option>'; }).join('');
+      pick.setAttribute('data-names', names.join('|'));
+    }
+    if ($('follow').checked || names.indexOf(pickedLog) < 0) {
+      var busy = S.logs.filter(function (l) { return l.size > 0; });
+      pickedLog = busy.length ? busy[0].name : names[0];
+    }
+    if (pickedLog) pick.value = pickedLog;
+    var log = S.logs.filter(function (l) { return l.name === pickedLog; })[0], box = $('logBox');
+    if (!log) { box.textContent = '没有日志。'; return; }
+    box.innerHTML = '<span class="muted">' + esc(log.name) + ' · 更新于 ' + ago(S.time - log.updated) + ' · ' + n(log.size / 1024, 1) + ' KB</span>\n' +
+      (log.tail.length ? log.tail.map(function (line) {
+        var c = /Traceback|Error|NOT_SCORED/.test(line) ? 't' : /DONE|scored |freed /.test(line) ? 'd' : '';
+        return c ? '<span class="' + c + '">' + esc(line) + '</span>' : esc(line);
+      }).join('\n') : '（空）');
+  }
+
+  function render() {
+    if (!state) return;
+    renderHeader();
+    var S = state.snapshot;
+    if (!S) return;
+    renderAlerts(S); renderOverall(S); renderResources(S); renderRuns(S); renderCurves(S); renderResults(S); renderLogs(S);
+    $('foot').textContent = '服务器时间 ' + new Date(S.time * 1000).toLocaleString('zh-CN') + ' · ' + S.host + ' · 每 ' + state.poll.interval + ' 秒取数一次（上次用时 ' +
+      n(state.poll.seconds, 1) + ' 秒）· 面板对服务器只读';
+  }
+
+  function pull() {
+    fetch('/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (data) {
+      data.fetched = Date.now() / 1000; state = data; render();
+    }).catch(function () {
+      $('dot').className = 'dot bad'; $('fresh').textContent = '本地面板服务没有响应（server.py 是否还在运行？）';
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var seedBtn = e.target.closest('[data-seed]'), row = e.target.closest('tr[data-run]');
+    if (seedBtn) { seed = +seedBtn.getAttribute('data-seed'); $('charts').innerHTML = ''; render(); }
+    if (row) {
+      selectedRun = row.getAttribute('data-run');
+      var log = row.getAttribute('data-log');
+      if (log && state.snapshot.logs.some(function (l) { return l.name === log; })) { pickedLog = log; $('follow').checked = false; }
+      render();
+    }
+  });
+  $('logPick').addEventListener('change', function () { pickedLog = this.value; $('follow').checked = false; render(); });
+  $('follow').addEventListener('change', render);
+  $('curveVal').addEventListener('click', function () { curve = 'val_loss'; this.setAttribute('aria-pressed', 'true'); $('curveTrain').setAttribute('aria-pressed', 'false'); render(); });
+  $('curveTrain').addEventListener('click', function () { curve = 'train_loss'; this.setAttribute('aria-pressed', 'true'); $('curveVal').setAttribute('aria-pressed', 'false'); render(); });
+  $('refresh').addEventListener('click', function () { fetch('/api/refresh', { method: 'POST' }).then(function () { setTimeout(pull, 2500); }); });
+  window.addEventListener('resize', render);
+  pull();
+  setInterval(pull, 4000);
+  setInterval(function () { if (state) renderHeader(); }, 1000);
+})();
+</script>
+</body>
+</html>

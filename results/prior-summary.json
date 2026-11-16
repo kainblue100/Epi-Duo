@@ -1,0 +1,95 @@
+{
+ "format": "epi-duo-prior-v1",
+ "nodes": 3592,
+ "hvg_nodes": 2000,
+ "target_nodes": 1875,
+ "source_factors": 25,
+ "source_factor_symbols": [
+  "CBX1",
+  "DNMT1",
+  "E2F6",
+  "EHMT2",
+  "EWSR1",
+  "HNRNPH1",
+  "HNRNPL",
+  "KDM1A",
+  "MCM3",
+  "MIER1",
+  "NCOA4",
+  "NFRKB",
+  "PCBP1",
+  "PCBP2",
+  "SETDB1",
+  "SFPQ",
+  "SIN3A",
+  "SMARCB1",
+  "SP1",
+  "SRSF7",
+  "TARDBP",
+  "THAP1",
+  "THRAP3",
+  "UBTF",
+  "USF2"
+ ],
+ "nodes_with_locus": 3577,
+ "atac_elements": 172732,
+ "elements_bound_by_any_factor": 102868,
+ "loops": 30315,
+ "elements_with_methylation": 170127,
+ "nodes_with_promoter_methylation": 3572,
+ "relations": {
+  "tf_promoter": {
+   "edges": 25557,
+   "symmetric": false,
+   "successful_swaps": 127785,
+   "shuffled_edges_kept_from_real": 16435
+  },
+  "tf_distal": {
+   "edges": 2901,
+   "symmetric": false,
+   "successful_swaps": 14505,
+   "shuffled_edges_kept_from_real": 828
+  },
+  "promoter_contact": {
+   "edges": 212,
+   "symmetric": true,
+   "successful_swaps": 1060,
+   "shuffled_edges_kept_from_real": 1
+  },
+  "shared_element": {
+   "edges": 235,
+   "symmetric": true,
+   "successful_swaps": 1175,
+   "shuffled_edges_kept_from_real": 2
+  }
+ },
+ "target_nodes_with_any_edge": 1801,
+ "target_nodes_that_are_source_factors": 20,
+ "hvg_nodes_with_any_edge": 1952,
+ "direct_tokens": {
+  "max_tokens": 24,
+  "features": 32,
+  "nodes_with_tokens": 3565,
+  "median_candidate_elements": 20.0,
+  "nodes_truncated": 1223,
+  "priority": "promoter overlap, then loop-linked, then nearest within 50 kb of the canonical TSS"
+ },
+ "definitions": {
+  "promoter": "[TSS-1000, TSS+1001) around every GENCODE v44 transcript start",
+  "tf_promoter": "factor ChIP peak, ATAC peak and target promoter share at least one base",
+  "tf_distal": "factor ChIP peak overlaps an ATAC peak in the loop anchor opposite the target promoter",
+  "promoter_contact": "promoters of two genes lie in opposite anchors of one Hi-C loop",
+  "shared_element": "two genes are loop-linked to the same distal ATAC peak",
+  "methylation": "coverage-weighted CpG fraction pooled over WGBS replicates; fewer than 10 reads is unobserved"
+ },
+ "controls": {
+  "grn": "per-relation degree-preserving double-edge swaps; node features unchanged",
+  "direct": "token sets reassigned by a permutation of genes that have a locus"
+ },
+ "caveats": [
+  "Bulk, unpaired K562 experiments; applying them to RPE1 is cross-cell-line transfer.",
+  "Edges are unsigned candidates, not validated regulatory interactions.",
+  "Only the ChIP factors already selected by Epi-C3 are used, so factor coverage is narrow."
+ ],
+ "seed": 20261116
+}

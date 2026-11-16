@@ -1,0 +1,48 @@
+{
+ "format": "epi-duo-benchmark-v1",
+ "sources": {
+  "k562": {
+   "file": "ReplogleWeissman2022_K562_essential.h5ad",
+   "rows": 310385
+  },
+  "rpe1": {
+   "file": "ReplogleWeissman2022_rpe1.h5ad",
+   "rows": 247914
+  }
+ },
+ "cells": {
+  "k562": 291337,
+  "rpe1": 206543
+ },
+ "control_cells": {
+  "k562": 10691,
+  "rpe1": 11485
+ },
+ "shared_genes": 7226,
+ "hvg": 2000,
+ "eligible_perturbations": 1875,
+ "min_cells_per_perturbation_and_context": 20,
+ "splits": {
+  "k562": {
+   "test": 913,
+   "val": 100,
+   "fewshot_train": 862,
+   "paper_test_total": 969
+  },
+  "rpe1": {
+   "test": 899,
+   "val": 100,
+   "fewshot_train": 876,
+   "paper_test_total": 1061
+  }
+ },
+ "normalisation": "log1p(counts / per-cell total over all stored genes * 10000)",
+ "hvg_selection": "scanpy seurat flavour on a seeded sample of 100000 cells that are training cells under both splits",
+ "test_lists": "STATE preprint replogle_tomls/{k562,rpe1}.toml intersected with eligible perturbations",
+ "sha256": {
+  "data/k562.h5ad": "5110aa7e64cdf7920acd51c68b4e83869e7711fdf636a8e8a7350554b33c02c2",
+  "data/rpe1.h5ad": "fd4b8144f7f5f4bf68f50dbb67ee7cb0da557915b294b1421891faf8ad96986c",
+  "splits/k562.toml": "3f954f4e76f7f881a96ab84c8e2db498f82ab5429da69be06abf48f48fc5e007",
+  "splits/rpe1.toml": "fb33df515151c4a2521dccd71fdf7373843ce3c1bc8b7e2980a4fa9f7d1db739"
+ }
+}

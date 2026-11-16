@@ -1,0 +1,13 @@
+{
+ "profile": "full",
+ "pdex_kwargs": {
+  "is_log1p": true,
+  "geometric_mean": true
+ },
+ "skipped_metrics": [
+  "pearson_edistance",
+  "clustering_agreement"
+ ],
+ "perturbations": 899,
+ "cells": {}
+}
